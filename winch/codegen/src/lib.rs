@@ -8,6 +8,7 @@
 
 mod abi;
 mod codegen;
+pub mod disasm;
 mod frame;
 pub mod isa;
 pub use isa::*;
