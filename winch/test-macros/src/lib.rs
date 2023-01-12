@@ -6,6 +6,8 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::ItemFn;
 
+/// Generate a test case for every .wat file in the filetests directory
+/// This should only be used from the filetests crate
 #[proc_macro_attribute]
 pub fn generate_file_tests(_attr: TokenStream, input: TokenStream) -> TokenStream {
     // Parse the input as a function

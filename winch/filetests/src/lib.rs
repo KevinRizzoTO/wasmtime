@@ -19,10 +19,8 @@ struct TestConfig {
     target: String,
 }
 
+/// A helper function to parse the test configuration from the top of the file.
 fn parse_config(wat: &str) -> TestConfig {
-    // The test config source is the leading lines of the WAT file that are
-    // prefixed with `;;!`.
-
     let config_lines: Vec<_> = wat
         .lines()
         .take_while(|l| l.starts_with(";;!"))
@@ -35,6 +33,7 @@ fn parse_config(wat: &str) -> TestConfig {
         .unwrap()
 }
 
+/// A helper function to parse the expected result from the bottom of the file.
 fn parse_expected_result(wat: &str) -> String {
     let mut expected_lines: Vec<_> = wat
         .lines()
@@ -53,6 +52,7 @@ fn parse_expected_result(wat: &str) -> String {
     expected.trim().to_string()
 }
 
+/// A helper function to rewrite the expected result in the file.
 fn rewrite_expected(wat: &str, actual: &str) -> String {
     let old_expectation_line_count = wat
         .lines()
@@ -77,9 +77,6 @@ fn rewrite_expected(wat: &str, actual: &str) -> String {
 
     new_wat
 }
-
-// DOIT look into a wrapper command for this like `winch-tools test` (similar to Cranelift's `clif-util test`)
-// DOIT add documentation for test usage
 
 #[generate_file_tests]
 fn run_test(test_path: &str) {
