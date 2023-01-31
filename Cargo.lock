@@ -3791,6 +3791,7 @@ dependencies = [
  "cranelift-codegen",
  "object",
  "target-lexicon",
+ "wasmtime-cranelift",
  "wasmtime-environ",
  "winch-codegen",
 ]

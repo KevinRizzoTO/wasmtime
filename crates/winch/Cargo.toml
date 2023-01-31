@@ -11,6 +11,7 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 winch-codegen = { workspace = true }
 target-lexicon = { workspace = true }
 wasmtime-environ = { workspace = true }
+wasmtime-cranelift = { workspace = true }
 anyhow = { workspace = true }
 object = { workspace = true }
 cranelift-codegen = { workspace = true }

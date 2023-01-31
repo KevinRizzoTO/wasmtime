@@ -1658,6 +1658,8 @@ impl<I: VCodeInst> TextSectionBuilder for MachTextSectionBuilder<I> {
     }
 
     fn finish(&mut self) -> Vec<u8> {
+        // DOIT: implement a similar check for Winch, or find a way to abstract
+        // all this
         // Double-check all functions were pushed.
         assert_eq!(self.next_func, self.buf.label_offsets.len());
 

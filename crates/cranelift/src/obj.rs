@@ -85,6 +85,7 @@ impl<'a> ModuleTextBuilder<'a> {
             obj,
             text_section,
             unwind_info: Default::default(),
+            // ASK: Do we need to incorporate a similar function for Winch ISA structs?
             text: isa.text_section_builder(num_funcs),
             libcall_symbols: HashMap::default(),
         }

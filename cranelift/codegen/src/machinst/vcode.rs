@@ -692,6 +692,7 @@ impl<I: VCodeInst> VCode<I> {
 
     fn compute_clobbers(&self, regalloc: &regalloc2::Output) -> Vec<Writable<RealReg>> {
         // Compute clobbered registers.
+        // ASK: What are clobbers?
         let mut clobbered = vec![];
         let mut clobbered_set = FxHashSet::default();
 
@@ -776,10 +777,12 @@ impl<I: VCodeInst> VCode<I> {
 
         // The first M MachLabels are reserved for block indices, the next N MachLabels for
         // constants.
+        // ASK: Why do we need to reserve labels?
         buffer.reserve_labels_for_blocks(self.num_blocks());
         buffer.reserve_labels_for_constants(&self.constants);
 
         // Construct the final order we emit code in: cold blocks at the end.
+        // ASK: What is a cold block?
         let mut final_order: SmallVec<[BlockIndex; 16]> = smallvec![];
         let mut cold_blocks: SmallVec<[BlockIndex; 16]> = smallvec![];
         for block in 0..self.num_blocks() {

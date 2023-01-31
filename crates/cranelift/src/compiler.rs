@@ -631,6 +631,9 @@ impl Compiler {
             validator_allocations,
         } = self.take_context();
 
+        // DOIT: Remove this when we have the disassembler in place.
+        context.set_disasm(true);
+
         // The name doesn't matter here.
         context.func = ir::Function::with_name_signature(UserFuncName::default(), host_signature);
 
@@ -876,7 +879,9 @@ impl Compiler {
         cache_ctx: Option<&mut IncrementalCacheContext>,
         isa: &dyn TargetIsa,
     ) -> Result<CompiledFunction, CompileError> {
+        log::debug!("Compiling trampoline");
         let (compiled_code, code_buf) = compile_maybe_cached(context, isa, cache_ctx)?;
+        log::debug!("Trampoline compiled");
 
         // Processing relocations isn't the hardest thing in the world here but
         // no trampoline should currently generate a relocation, so assert that

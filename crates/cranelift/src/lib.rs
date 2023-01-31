@@ -26,6 +26,7 @@ type CompiledFunctions<'a> = PrimaryMap<DefinedFuncIndex, &'a CompiledFunction>;
 /// Compiled function: machine code body, jump table offsets, and unwind information.
 #[derive(Default)]
 pub struct CompiledFunction {
+    // DOIT: Provide a method to set this value from a slice
     /// The machine code for this function.
     body: Vec<u8>,
 
