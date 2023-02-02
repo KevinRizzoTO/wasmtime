@@ -47,6 +47,21 @@ impl Builder {
     pub fn build(self, shared_flags: settings::Flags) -> Result<Box<dyn TargetIsa>> {
         (self.constructor)(self.triple, shared_flags, self.settings)
     }
+
+    /// Iterates the available settings in the builder.
+    pub fn iter(&self) -> impl Iterator<Item = settings::Setting> {
+        self.settings.iter()
+    }
+}
+
+impl settings::Configurable for Builder {
+    fn set(&mut self, name: &str, value: &str) -> Result<(), settings::SetError> {
+        self.settings.set(name, value)
+    }
+
+    fn enable(&mut self, name: &str) -> Result<(), settings::SetError> {
+        self.settings.enable(name)
+    }
 }
 
 /// Look for an ISA builder for the given target triple.
