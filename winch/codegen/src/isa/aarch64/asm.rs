@@ -3,14 +3,16 @@
 use super::{address::Address, regs};
 use crate::{masm::OperandSize, reg::Reg};
 use cranelift_codegen::{
-    ir::MemFlags,
-    isa::aarch64::inst::{
+    ir::{MemFlags, self},
+    isa::{aarch64::inst::{
         self,
         emit::{EmitInfo, EmitState},
-        ALUOp, AMode, ExtendOp, Imm12, Inst, PairAMode,
-    },
+        ALUOp, AMode, CallIndInfo, ExtendOp, Imm12, Inst, PairAMode,
+    }, CallConv},
     settings, Final, MachBuffer, MachBufferFinalized, MachInstEmit, Writable,
 };
+use regalloc2::PRegSet;
+use smallvec::smallvec;
 
 /// An Aarch64 instruction operand.
 #[derive(Debug)]
@@ -212,6 +214,22 @@ impl Assembler {
             self.load_constant(imm, scratch);
             self.emit_alu_rrr_extend(alu_op, scratch, rn, rd, size);
         }
+    }
+
+    /// Branch with a link to a register.
+    /// DOIT: Rename this, might now want it to be specific to blr.
+    pub fn blr(&mut self, rn: Reg) {
+        self.emit(Inst::CallInd {
+            info: Box::new(CallIndInfo {
+                rn: rn.into(),
+                uses: smallvec![],
+                defs: smallvec![],
+                clobbers: PRegSet::empty(),
+                opcode: ir::Opcode::CallIndirect,
+                caller_callconv: CallConv::SystemV,
+                callee_callconv: CallConv::SystemV,
+            }),
+        });
     }
 
     /// Return instruction.

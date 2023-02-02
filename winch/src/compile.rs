@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use cranelift_codegen::settings;
+use cranelift_wasm::WasmFuncType;
 use std::{fs, path::PathBuf, str::FromStr};
 use target_lexicon::Triple;
 use wasmtime_environ::{
@@ -35,7 +36,7 @@ pub fn run(opt: &Options) -> Result<()> {
     let mut translation = ModuleEnvironment::new(&tunables, &mut validator, &mut types)
         .translate(parser, &bytes)
         .context("Failed to translate WebAssembly module")?;
-    let _ = types.finish();
+    let final_types = types.finish();
 
     let body_inputs = std::mem::take(&mut translation.function_body_inputs);
     let module = &translation.module;
@@ -44,6 +45,23 @@ pub fn run(opt: &Options) -> Result<()> {
     body_inputs
         .into_iter()
         .try_for_each(|func| compile(&*isa, module, types, func))?;
+
+    translation.exported_signatures.iter().try_for_each(|sig| {
+        let ty = &final_types[*sig];
+        compile_trampoline(&*isa, ty)
+    })?;
+
+    Ok(())
+}
+
+fn compile_trampoline(isa: &dyn TargetIsa, ty: &WasmFuncType) -> Result<()> {
+    let buffer = isa
+        .compile_trampoline(ty)
+        .expect("Couldn't compile trampoline");
+
+    disasm(buffer.data(), isa)?
+        .iter()
+        .for_each(|s| println!("{}", s));
 
     Ok(())
 }

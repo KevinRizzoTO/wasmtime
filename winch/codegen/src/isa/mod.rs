@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Result};
 use core::fmt::Formatter;
 use cranelift_codegen::{isa::CallConv, settings, Final, MachBufferFinalized};
+use cranelift_wasm::WasmFuncType;
 use std::{
     error,
     fmt::{self, Debug, Display},
@@ -98,6 +99,8 @@ pub trait TargetIsa: Send + Sync {
         body: &FunctionBody,
         validator: FuncValidator<ValidatorResources>,
     ) -> Result<MachBufferFinalized<Final>>;
+
+    fn compile_trampoline(&self, ty: &WasmFuncType) -> Result<MachBufferFinalized<Final>>;
 
     /// Get the default calling convention of the underlying target triple.
     fn call_conv(&self) -> CallConv {

@@ -138,6 +138,11 @@ impl Masm for MacroAssembler {
     fn finalize(self) -> MachBufferFinalized<Final> {
         self.asm.finalize()
     }
+
+    fn call(&mut self, addr: Reg) {
+        todo!()
+    }
+
 }
 
 impl MacroAssembler {
