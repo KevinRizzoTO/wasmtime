@@ -97,6 +97,9 @@ pub(crate) trait MacroAssembler {
     /// Zero a particular register.
     fn zero(&mut self, reg: Reg);
 
+    /// Call a function at a given address.
+    fn call(&mut self, addr: Reg);
+
     /// Zero a given memory range.
     ///
     /// The default implementation divides the given memory range

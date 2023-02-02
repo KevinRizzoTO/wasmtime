@@ -94,4 +94,8 @@ impl TargetIsa for X64 {
 
         Ok(masm.finalize())
     }
+
+    fn compile_trampoline(&self, ty: &cranelift_wasm::WasmFuncType) -> Result<MachBufferFinalized<Final>> {
+        todo!()
+    }
 }

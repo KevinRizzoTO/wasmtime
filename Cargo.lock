@@ -3962,6 +3962,7 @@ version = "0.5.0"
 dependencies = [
  "anyhow",
  "cranelift-codegen",
+ "cranelift-wasm",
  "regalloc2",
  "smallvec",
  "target-lexicon",
@@ -4003,6 +4004,7 @@ dependencies = [
  "capstone",
  "clap 3.2.8",
  "cranelift-codegen",
+ "cranelift-wasm",
  "glob",
  "serde",
  "similar",

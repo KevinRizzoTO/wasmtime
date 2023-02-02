@@ -157,6 +157,13 @@ impl Masm for MacroAssembler {
 
         self.sp_offset
     }
+
+    fn call(&mut self, addr: Reg) {
+        // how to call a function?
+        // other functions use the self.asm property, what changes need to be added there?
+        self.asm.blr(addr);
+    }
+
 }
 
 impl MacroAssembler {
