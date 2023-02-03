@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use core::fmt::Formatter;
-use cranelift_codegen::{isa::CallConv, settings, Final, MachBufferFinalized};
+use cranelift_codegen::{isa::CallConv, settings, Final, MachBufferFinalized, TextSectionBuilder};
 use cranelift_wasm::WasmFuncType;
 use std::{
     error,
@@ -117,6 +117,11 @@ pub trait TargetIsa: Send + Sync {
 
     fn compile_trampoline(&self, ty: &WasmFuncType) -> Result<MachBufferFinalized<Final>>;
 
+    fn text_section_builder(&self, num_labeled_funcs: usize) -> Box<dyn TextSectionBuilder>;
+
+    /// The function alignment required by this ISA.
+    fn function_alignment(&self) -> u32;
+
     /// Get the default calling convention of the underlying target triple.
     fn call_conv(&self) -> CallConv {
         CallConv::triple_default(&self.triple())
@@ -125,6 +130,23 @@ pub trait TargetIsa: Send + Sync {
     /// Get the endianess of the underlying target triple.
     fn endianness(&self) -> target_lexicon::Endianness {
         self.triple().endianness().unwrap()
+    }
+
+    fn code_section_alignment(&self) -> u64 {
+        use target_lexicon::*;
+        match (self.triple().operating_system, self.triple().architecture) {
+            (
+                OperatingSystem::MacOSX { .. }
+                | OperatingSystem::Darwin
+                | OperatingSystem::Ios
+                | OperatingSystem::Tvos,
+                Architecture::Aarch64(..),
+            ) => 0x4000,
+            // 64 KB is the maximal page size (i.e. memory translation granule size)
+            // supported by the architecture and is used on some platforms.
+            (_, Architecture::Aarch64(..)) => 0x10000,
+            _ => 0x1000,
+        }
     }
 }
 

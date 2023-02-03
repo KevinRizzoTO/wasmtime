@@ -1,5 +1,8 @@
 use anyhow::Result;
-use cranelift_codegen::{ir, Final, MachBufferFinalized, MachStackMap, MachTrap};
+use cranelift_codegen::{
+    ir::{self, ExternalName, Function, UserExternalName},
+    MachReloc, MachStackMap, MachTrap,
+};
 use object::write::{Object, SymbolId};
 use std::any::Any;
 use wasmtime_environ::{
@@ -8,6 +11,8 @@ use wasmtime_environ::{
     TrapInformation, Tunables, WasmFunctionInfo,
 };
 use winch_codegen::TargetIsa;
+
+use crate::{obj::ModuleTextBuilder, CompiledFunction, Relocation, RelocationTarget};
 pub(crate) struct Compiler {
     isa: Box<dyn TargetIsa>,
 }
@@ -66,15 +71,31 @@ fn mach_trap_to_trap(trap: &MachTrap) -> TrapInformation {
     }
 }
 
-#[derive(Default)]
-pub struct CompiledFunction {
-    /// The machine code for this function.
-    body: Vec<u8>,
-
-    /// Metadata about traps in this module, mapping code offsets to the trap
-    /// that they may cause.
-    traps: Vec<TrapInformation>,
-    // DOIT: what else do we need here?
+fn mach_reloc_to_reloc(func: &Function, reloc: &MachReloc) -> Relocation {
+    let &MachReloc {
+        offset,
+        kind,
+        ref name,
+        addend,
+    } = reloc;
+    let reloc_target = if let ExternalName::User(user_func_ref) = *name {
+        // DOIT: We need this index to ultimately resolve the relocation, but we don't have
+        // anything in this IR format. Where can we get the index from based on the
+        // UserExternalNameRef?
+        let UserExternalName { namespace, index } = func.params.user_named_funcs()[user_func_ref];
+        debug_assert_eq!(namespace, 0);
+        RelocationTarget::UserFunc(FuncIndex::from_u32(index))
+    } else if let ExternalName::LibCall(libcall) = *name {
+        RelocationTarget::LibCall(libcall)
+    } else {
+        panic!("unrecognized external name")
+    };
+    Relocation {
+        reloc: kind,
+        reloc_target,
+        offset,
+        addend,
+    }
 }
 
 impl wasmtime_environ::Compiler for Compiler {
@@ -113,6 +134,13 @@ impl wasmtime_environ::Compiler for Compiler {
             stack_maps: mach_stack_maps_to_stack_maps(buffer.stack_maps()).into(),
         };
 
+        // DOIT: We don't have the Function type, need something different.
+        let fun_relocs = buffer
+            .relocs()
+            .iter()
+            .map(|r| mach_reloc_to_reloc(&buffer, r))
+            .collect();
+
         let traps = buffer.traps().into_iter().map(mach_trap_to_trap).collect();
 
         Ok((
@@ -120,6 +148,7 @@ impl wasmtime_environ::Compiler for Compiler {
             Box::new(CompiledFunction {
                 traps,
                 body: buffer.data().to_vec(),
+                relocations: fun_relocs,
             }),
         ))
     }
@@ -138,12 +167,8 @@ impl wasmtime_environ::Compiler for Compiler {
         _tunables: &Tunables,
         resolve_reloc: &dyn Fn(usize, FuncIndex) -> usize,
     ) -> Result<Vec<(SymbolId, FunctionLoc)>> {
-        // DOIT: the ModuleTextBuilder needs to be ported from Cranelift
         let mut builder = ModuleTextBuilder::new(obj, &*self.isa, funcs.len());
         let mut traps = TrapEncodingBuilder::default();
-
-        // DOIT: create a ModuleTextBuilder struct and copy the required code
-        // from wasmtime-cranelift.
 
         // High level overview:
         // Take the object that is being created. Append all compiled functions
