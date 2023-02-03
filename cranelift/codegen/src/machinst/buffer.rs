@@ -1610,6 +1610,7 @@ pub struct MachTextSectionBuilder<I: VCodeInst> {
 }
 
 impl<I: VCodeInst> MachTextSectionBuilder<I> {
+    /// Create a new `MachTextSectionBuilder` with the given number of functions.
     pub fn new(num_funcs: usize) -> MachTextSectionBuilder<I> {
         let mut buf = MachBuffer::new();
         buf.reserve_labels_for_blocks(num_funcs);
