@@ -1,20 +1,26 @@
-use self::{regs::{scratch, ALL_GPR}, address::Address};
+use self::{
+    address::Address,
+    regs::{scratch, ALL_GPR},
+};
 use crate::{
     abi::ABI,
     codegen::{CodeGen, CodeGenContext},
     frame::Frame,
     isa::{Builder, TargetIsa},
-    masm::{MacroAssembler, RegImm, OperandSize},
+    masm::{MacroAssembler, OperandSize, RegImm},
+    reg,
     regalloc::RegAlloc,
     regset::RegSet,
-    stack::Stack, reg,
+    stack::Stack,
 };
 use anyhow::Result;
 use cranelift_codegen::{
-    isa::aarch64::settings as aarch64_settings, settings::Flags, Final, MachBufferFinalized,
+    isa::aarch64::{inst, settings as aarch64_settings},
+    settings::Flags,
+    Final, MachBufferFinalized, MachTextSectionBuilder,
 };
-use masm::MacroAssembler as Aarch64Masm;
 use cranelift_wasm::WasmFuncType;
+use masm::MacroAssembler as Aarch64Masm;
 use target_lexicon::Triple;
 use wasmparser::{FuncType, FuncValidator, FunctionBody, ValidatorResources};
 
@@ -90,10 +96,7 @@ impl TargetIsa for Aarch64 {
         Ok(masm.finalize())
     }
 
-    fn compile_trampoline(
-        &self,
-        _ty: &WasmFuncType,
-    ) -> Result<MachBufferFinalized<Final>> {
+    fn compile_trampoline(&self, _ty: &WasmFuncType) -> Result<MachBufferFinalized<Final>> {
         // need to recreate wasm signature for the trampoline params
         // don't need a Stack object
         // will be building the function manually using the macro assembler
@@ -123,9 +126,26 @@ impl TargetIsa for Aarch64 {
         // aarch64 calling convention is to return in x0
         // read from w0 (for 32 bit) and x0 (for 64 bit)
         // store in [x3] so it's updated for the caller
-        masm.store(RegImm::reg(regs::xreg(0)), Address::offset(regs::xreg(3), 0), OperandSize::S64);
+        masm.store(
+            RegImm::reg(regs::xreg(0)),
+            Address::offset(regs::xreg(3), 0),
+            OperandSize::S64,
+        );
         masm.epilogue(0);
 
         Ok(masm.finalize())
+    }
+
+    fn text_section_builder(
+        &self,
+        num_labeled_funcs: usize,
+    ) -> Box<dyn cranelift_codegen::TextSectionBuilder> {
+        Box::new(MachTextSectionBuilder::<inst::Inst>::new(num_labeled_funcs))
+    }
+
+    fn function_alignment(&self) -> u32 {
+        // We use 32-byte alignment for performance reasons, but for correctness we would only need
+        // 4-byte alignment.
+        32
     }
 }

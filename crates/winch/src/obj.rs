@@ -1,7 +1,14 @@
-use winch_codegen::TargetIsa;
-use object::{write::{Object, SymbolId, SectionId, StandardSegment, Symbol}, SectionKind, SymbolKind, SymbolScope, SymbolSection, SymbolFlags};
+use std::ops::Range;
+
 use cranelift_codegen::TextSectionBuilder;
-use cranelift_codegen::machinst::MachTextSectionBuilder;
+use object::{
+    write::{Object, SectionId, StandardSegment, Symbol, SymbolId, SymbolSection},
+    SectionKind, SymbolFlags, SymbolKind, SymbolScope,
+};
+use wasmtime_environ::FuncIndex;
+use winch_codegen::TargetIsa;
+
+use crate::{CompiledFunction, RelocationTarget};
 
 const TEXT_SECTION_NAME: &[u8] = b".text";
 
@@ -41,9 +48,7 @@ impl<'a> ModuleTextBuilder<'a> {
             isa,
             obj,
             text_section,
-            // DOIT: This is behind a private module in cranelift_codegen, we will need to create
-            // our own minimal version of export it somehow
-            text: Box::new(MachTextSectionBuilder::<inst::Inst>::new(num_funcs)),
+            text: isa.text_section_builder(num_funcs),
         }
     }
 
@@ -60,7 +65,6 @@ impl<'a> ModuleTextBuilder<'a> {
     pub fn append_func(
         &mut self,
         name: &str,
-        // DOIT: Expose this outside of the compiler file.
         func: &'a CompiledFunction,
         resolve_reloc_target: impl Fn(FuncIndex) -> usize,
     ) -> (SymbolId, Range<u64>) {
@@ -69,7 +73,9 @@ impl<'a> ModuleTextBuilder<'a> {
         let off = self.text.append(
             true,
             &func.body,
-            self.isa.function_alignment().max(func.alignment),
+            // DOIT: Decide if we need a function alignment to be taken from the function itself
+            // like Cranelift.
+            self.isa.function_alignment(),
         );
 
         let symbol_id = self.obj.add_symbol(Symbol {
@@ -82,6 +88,40 @@ impl<'a> ModuleTextBuilder<'a> {
             section: SymbolSection::Section(self.text_section),
             flags: SymbolFlags::None,
         });
+
+        for r in func.relocations.iter() {
+            match r.reloc_target {
+                // Relocations against user-defined functions means that this is
+                // a relocation against a module-local function, typically a
+                // call between functions. The `text` field is given priority to
+                // resolve this relocation before we actually emit an object
+                // file, but if it can't handle it then we pass through the
+                // relocation.
+                RelocationTarget::UserFunc(index) => {
+                    let target = resolve_reloc_target(index);
+                    if self
+                        .text
+                        .resolve_reloc(off + u64::from(r.offset), r.reloc, r.addend, target)
+                    {
+                        continue;
+                    }
+
+                    // At this time it's expected that all relocations are
+                    // handled by `text.resolve_reloc`, and anything that isn't
+                    // handled is a bug in `text.resolve_reloc` or something
+                    // transitively there. If truly necessary, though, then this
+                    // loop could also be updated to forward the relocation to
+                    // the final object file as well.
+                    panic!(
+                        "unresolved relocation could not be procesed against \
+                         {index:?}: {r:?}"
+                    );
+                }
+                // DOIT: The Cranelift obj.rs file suggests this is uncommon.
+                // Decide if it should be included in the first pass.
+                RelocationTarget::LibCall(_) => todo!(),
+            };
+        }
 
         (symbol_id, off..off + body_len)
     }

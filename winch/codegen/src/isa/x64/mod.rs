@@ -95,7 +95,23 @@ impl TargetIsa for X64 {
         Ok(masm.finalize())
     }
 
-    fn compile_trampoline(&self, ty: &cranelift_wasm::WasmFuncType) -> Result<MachBufferFinalized<Final>> {
+    fn compile_trampoline(
+        &self,
+        ty: &cranelift_wasm::WasmFuncType,
+    ) -> Result<MachBufferFinalized<Final>> {
         todo!()
+    }
+
+    fn text_section_builder(
+        &self,
+        num_labeled_funcs: usize,
+    ) -> Box<dyn cranelift_codegen::TextSectionBuilder> {
+        todo!()
+    }
+
+    /// Align functions on x86 to 16 bytes, ensuring that rip-relative loads to SSE registers are
+    /// always from aligned memory.
+    fn function_alignment(&self) -> u32 {
+        16
     }
 }
