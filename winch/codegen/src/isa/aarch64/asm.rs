@@ -217,7 +217,7 @@ impl Assembler {
     }
 
     /// Branch with a link to a register.
-    /// DOIT: Rename this, might now want it to be specific to blr.
+    /// DOIT: Rename this, might not want it to be specific to blr.
     pub fn blr(&mut self, rn: Reg) {
         self.emit(Inst::CallInd {
             info: Box::new(CallIndInfo {

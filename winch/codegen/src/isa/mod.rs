@@ -108,6 +108,12 @@ pub trait TargetIsa: Send + Sync {
     /// Get the target triple of the ISA.
     fn triple(&self) -> &Triple;
 
+    /// Get the ISA-independent flags that were used to make this trait object.
+    fn flags(&self) -> &settings::Flags;
+
+    /// Get the ISA-dependent flag values that were used to make this trait object.
+    fn isa_flags(&self) -> Vec<settings::Value>;
+
     fn compile_function(
         &self,
         sig: &FuncType,

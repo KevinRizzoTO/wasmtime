@@ -1494,8 +1494,10 @@ impl Config {
 
     #[cfg(compiler)]
     pub(crate) fn build_compiler(&mut self) -> Result<Box<dyn wasmtime_environ::Compiler>> {
+        // DOIT: default to Winch for testing, change back when we have proper config
         let mut compiler = match self.compiler_config.strategy {
             Strategy::Auto | Strategy::Cranelift => wasmtime_cranelift::builder(),
+            Strategy::Winch => wasmtime_cranelift::builder(),
         };
 
         if let Some(target) = &self.compiler_config.target {
@@ -1655,6 +1657,8 @@ pub enum Strategy {
     /// Currently the default backend, Cranelift aims to be a reasonably fast
     /// code generator which generates high quality machine code.
     Cranelift,
+    /// DOIT: docs
+    Winch
 }
 
 /// Possible optimization levels for the Cranelift codegen backend.

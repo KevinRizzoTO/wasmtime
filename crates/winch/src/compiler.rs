@@ -1,18 +1,15 @@
 use anyhow::Result;
-use cranelift_codegen::{
-    ir::{self, ExternalName, Function, UserExternalName},
-    MachReloc, MachStackMap, MachTrap,
-};
+use cranelift_codegen::{ir, MachStackMap, MachTrap, settings};
 use object::write::{Object, SymbolId};
 use std::any::Any;
 use wasmtime_environ::{
     CompileError, DefinedFuncIndex, FilePos, FuncIndex, FunctionBodyData, FunctionLoc,
     ModuleTranslation, ModuleTypes, PrimaryMap, StackMapInformation, Trap, TrapEncodingBuilder,
-    TrapInformation, Tunables, WasmFunctionInfo,
+    TrapInformation, Tunables, WasmFunctionInfo, FlagValue,
 };
 use winch_codegen::TargetIsa;
 
-use crate::{obj::ModuleTextBuilder, CompiledFunction, Relocation, RelocationTarget};
+use crate::{obj::ModuleTextBuilder, CompiledFunction};
 pub(crate) struct Compiler {
     isa: Box<dyn TargetIsa>,
 }
@@ -71,30 +68,12 @@ fn mach_trap_to_trap(trap: &MachTrap) -> TrapInformation {
     }
 }
 
-fn mach_reloc_to_reloc(func: &Function, reloc: &MachReloc) -> Relocation {
-    let &MachReloc {
-        offset,
-        kind,
-        ref name,
-        addend,
-    } = reloc;
-    let reloc_target = if let ExternalName::User(user_func_ref) = *name {
-        // DOIT: We need this index to ultimately resolve the relocation, but we don't have
-        // anything in this IR format. Where can we get the index from based on the
-        // UserExternalNameRef?
-        let UserExternalName { namespace, index } = func.params.user_named_funcs()[user_func_ref];
-        debug_assert_eq!(namespace, 0);
-        RelocationTarget::UserFunc(FuncIndex::from_u32(index))
-    } else if let ExternalName::LibCall(libcall) = *name {
-        RelocationTarget::LibCall(libcall)
-    } else {
-        panic!("unrecognized external name")
-    };
-    Relocation {
-        reloc: kind,
-        reloc_target,
-        offset,
-        addend,
+fn to_flag_value(v: &settings::Value) -> FlagValue {
+    match v.kind() {
+        settings::SettingKind::Enum => FlagValue::Enum(v.as_enum().unwrap().into()),
+        settings::SettingKind::Num => FlagValue::Num(v.as_num().unwrap()),
+        settings::SettingKind::Bool => FlagValue::Bool(v.as_bool().unwrap()),
+        settings::SettingKind::Preset => unreachable!(),
     }
 }
 
@@ -122,9 +101,6 @@ impl wasmtime_environ::Compiler for Compiler {
         // how we can re-use existing context objects.
         let validator = validator.into_validator(Default::default());
 
-        // DOIT: document the approach to putting the VMContext into the correct
-        // register. Consider the approach in SpiderMonkey
-
         let buffer = isa
             .compile_function(&sig, &body, validator)
             .map_err(|e| CompileError::Codegen(format!("{:?}", e)))?;
@@ -134,13 +110,6 @@ impl wasmtime_environ::Compiler for Compiler {
             stack_maps: mach_stack_maps_to_stack_maps(buffer.stack_maps()).into(),
         };
 
-        // DOIT: We don't have the Function type, need something different.
-        let fun_relocs = buffer
-            .relocs()
-            .iter()
-            .map(|r| mach_reloc_to_reloc(&buffer, r))
-            .collect();
-
         let traps = buffer.traps().into_iter().map(mach_trap_to_trap).collect();
 
         Ok((
@@ -148,16 +117,22 @@ impl wasmtime_environ::Compiler for Compiler {
             Box::new(CompiledFunction {
                 traps,
                 body: buffer.data().to_vec(),
-                relocations: fun_relocs,
             }),
         ))
     }
 
     fn compile_host_to_wasm_trampoline(
         &self,
-        _ty: &wasmtime_environ::WasmFuncType,
+        ty: &wasmtime_environ::WasmFuncType,
     ) -> Result<Box<dyn Any + Send>, CompileError> {
-        todo!()
+        let buffer = self.isa
+            .compile_trampoline(ty)
+            .map_err(|e| CompileError::Codegen(format!("{:?}", e)))?;
+
+        Ok(Box::new(CompiledFunction {
+            traps: Vec::new(),
+            body: buffer.data().to_vec(),
+        }))
     }
 
     fn append_code(
@@ -179,7 +154,7 @@ impl wasmtime_environ::Compiler for Compiler {
         let mut ret = Vec::with_capacity(funcs.len());
         for (i, (sym, func)) in funcs.iter().enumerate() {
             let func = func.downcast_ref::<CompiledFunction>().unwrap();
-            // ASK: what is the builder doing in Cranelift to get these values?
+
             let (sym, range) = builder.append_func(&sym, func, |idx| resolve_reloc(i, idx));
             traps.push(range.clone(), &func.traps);
             let info = FunctionLoc {
@@ -188,6 +163,10 @@ impl wasmtime_environ::Compiler for Compiler {
             };
             ret.push((sym, info));
         }
+
+        builder.finish();
+
+        traps.append_to(obj);
 
         Ok(ret)
     }
@@ -206,19 +185,28 @@ impl wasmtime_environ::Compiler for Compiler {
     }
 
     fn page_size_align(&self) -> u64 {
-        todo!()
+        self.isa.code_section_alignment()
     }
 
     fn flags(&self) -> std::collections::BTreeMap<String, wasmtime_environ::FlagValue> {
-        todo!()
+        self.isa
+            .flags()
+            .iter()
+            .map(|val| (val.name.to_string(), to_flag_value(&val)))
+            .collect()
     }
 
     fn isa_flags(&self) -> std::collections::BTreeMap<String, wasmtime_environ::FlagValue> {
-        todo!()
+        self.isa
+            .isa_flags()
+            .iter()
+            .map(|val| (val.name.to_string(), to_flag_value(&val)))
+            .collect()
     }
 
     fn is_branch_protection_enabled(&self) -> bool {
-        todo!()
+        // DOIT: Add this to the ISA
+        false
     }
 
     #[cfg(feature = "component-model")]
