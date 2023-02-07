@@ -114,4 +114,12 @@ impl TargetIsa for X64 {
     fn function_alignment(&self) -> u32 {
         16
     }
+
+    fn flags(&self) -> &cranelift_codegen::settings::Flags {
+        &self.shared_flags
+    }
+
+    fn isa_flags(&self) -> Vec<cranelift_codegen::settings::Value> {
+        self.isa_flags.iter().collect()
+    }
 }

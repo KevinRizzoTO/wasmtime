@@ -18,12 +18,23 @@ struct Builder {
 
 pub fn builder() -> Box<dyn CompilerBuilder> {
     let triple = Triple::host();
+    let mut flags = settings::builder();
+
+    // DOIT: Discuss these flags, won't work without them
+    flags
+        .enable("avoid_div_traps")
+        .expect("should be valid flag");
+
+    // DOIT: Do we actually need this? Copied from Cranelift
+    flags
+        .set("enable_probestack", "false")
+        .expect("should be valid flag");
+
 
     Box::new(Builder {
         triple: triple.clone(),
-        shared_flags: settings::builder(),
-        // TODO:
-        // Either refactor and re-use `cranelift-native::builder()` or come up with a similar
+        shared_flags: flags,
+        // DOIT: Either refactor and re-use `cranelift-native::builder()` or come up with a similar
         // mechanism to lookup the host's architecture ISA and infer native flags.
         isa_builder: isa::lookup(triple).expect("host architecture is not supported"),
     })

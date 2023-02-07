@@ -8,7 +8,7 @@ use object::{
 use wasmtime_environ::FuncIndex;
 use winch_codegen::TargetIsa;
 
-use crate::{CompiledFunction, RelocationTarget};
+use crate::CompiledFunction;
 
 const TEXT_SECTION_NAME: &[u8] = b".text";
 
@@ -66,7 +66,7 @@ impl<'a> ModuleTextBuilder<'a> {
         &mut self,
         name: &str,
         func: &'a CompiledFunction,
-        resolve_reloc_target: impl Fn(FuncIndex) -> usize,
+        _resolve_reloc_target: impl Fn(FuncIndex) -> usize,
     ) -> (SymbolId, Range<u64>) {
         let body_len = func.body.len() as u64;
 
@@ -89,39 +89,7 @@ impl<'a> ModuleTextBuilder<'a> {
             flags: SymbolFlags::None,
         });
 
-        for r in func.relocations.iter() {
-            match r.reloc_target {
-                // Relocations against user-defined functions means that this is
-                // a relocation against a module-local function, typically a
-                // call between functions. The `text` field is given priority to
-                // resolve this relocation before we actually emit an object
-                // file, but if it can't handle it then we pass through the
-                // relocation.
-                RelocationTarget::UserFunc(index) => {
-                    let target = resolve_reloc_target(index);
-                    if self
-                        .text
-                        .resolve_reloc(off + u64::from(r.offset), r.reloc, r.addend, target)
-                    {
-                        continue;
-                    }
-
-                    // At this time it's expected that all relocations are
-                    // handled by `text.resolve_reloc`, and anything that isn't
-                    // handled is a bug in `text.resolve_reloc` or something
-                    // transitively there. If truly necessary, though, then this
-                    // loop could also be updated to forward the relocation to
-                    // the final object file as well.
-                    panic!(
-                        "unresolved relocation could not be procesed against \
-                         {index:?}: {r:?}"
-                    );
-                }
-                // DOIT: The Cranelift obj.rs file suggests this is uncommon.
-                // Decide if it should be included in the first pass.
-                RelocationTarget::LibCall(_) => todo!(),
-            };
-        }
+        // TODO: Add relocation resolution when calls are supported in each Winch ISA.
 
         (symbol_id, off..off + body_len)
     }

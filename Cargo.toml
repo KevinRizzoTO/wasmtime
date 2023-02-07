@@ -26,6 +26,7 @@ wasmtime = { workspace = true, features = ['cache', 'cranelift'] }
 wasmtime-cache = { workspace = true }
 wasmtime-cli-flags = { workspace = true }
 wasmtime-cranelift = { workspace = true }
+wasmtime-winch = { workspace = true }
 wasmtime-environ = { workspace = true }
 wasmtime-wast = { workspace = true }
 wasmtime-wasi = { workspace = true, features = ["exit"] }
@@ -115,6 +116,7 @@ wasmtime = { path = "crates/wasmtime", version = "7.0.0", default-features = fal
 wasmtime-cache = { path = "crates/cache", version = "=7.0.0" }
 wasmtime-cli-flags = { path = "crates/cli-flags", version = "=7.0.0" }
 wasmtime-cranelift = { path = "crates/cranelift", version = "=7.0.0" }
+wasmtime-winch = { path = "crates/winch", version = "=7.0.0" }
 wasmtime-environ = { path = "crates/environ", version = "=7.0.0" }
 wasmtime-fiber = { path = "crates/fiber", version = "=7.0.0" }
 wasmtime-types = { path = "crates/types", version = "7.0.0" }

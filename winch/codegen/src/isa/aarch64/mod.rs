@@ -148,4 +148,12 @@ impl TargetIsa for Aarch64 {
         // 4-byte alignment.
         32
     }
+
+    fn flags(&self) -> &cranelift_codegen::settings::Flags {
+        &self.shared_flags
+    }
+
+    fn isa_flags(&self) -> Vec<cranelift_codegen::settings::Value> {
+        self.isa_flags.iter().collect()
+    }
 }

@@ -3393,6 +3393,7 @@ dependencies = [
  "wasmtime-jit",
  "wasmtime-runtime",
  "wasmtime-wasi",
+ "wasmtime-winch",
  "wat",
  "windows-sys",
 ]
@@ -3509,6 +3510,7 @@ dependencies = [
  "wasmtime-wasi-nn",
  "wasmtime-wasi-threads",
  "wasmtime-wast",
+ "wasmtime-winch",
  "wast 52.0.2",
  "wat",
  "windows-sys",
