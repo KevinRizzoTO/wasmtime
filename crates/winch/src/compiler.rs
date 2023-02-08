@@ -1,11 +1,11 @@
-use anyhow::Result;
-use cranelift_codegen::{ir, MachStackMap, MachTrap, settings};
+use anyhow::{Context, Result};
+use cranelift_codegen::{ir, settings, MachStackMap, MachTrap};
 use object::write::{Object, SymbolId};
 use std::any::Any;
 use wasmtime_environ::{
-    CompileError, DefinedFuncIndex, FilePos, FuncIndex, FunctionBodyData, FunctionLoc,
+    CompileError, DefinedFuncIndex, FilePos, FlagValue, FuncIndex, FunctionBodyData, FunctionLoc,
     ModuleTranslation, ModuleTypes, PrimaryMap, StackMapInformation, Trap, TrapEncodingBuilder,
-    TrapInformation, Tunables, WasmFunctionInfo, FlagValue,
+    TrapInformation, Tunables, WasmFunctionInfo,
 };
 use winch_codegen::TargetIsa;
 
@@ -44,6 +44,8 @@ fn mach_stack_maps_to_stack_maps(mach_stack_maps: &[MachStackMap]) -> Vec<StackM
     stack_maps
 }
 
+const ALWAYS_TRAP_CODE: u16 = 100;
+
 fn mach_trap_to_trap(trap: &MachTrap) -> TrapInformation {
     let &MachTrap { offset, code } = trap;
     TrapInformation {
@@ -62,7 +64,7 @@ fn mach_trap_to_trap(trap: &MachTrap) -> TrapInformation {
             ir::TrapCode::Interrupt => Trap::Interrupt,
             ir::TrapCode::User(ALWAYS_TRAP_CODE) => Trap::AlwaysTrapAdapter,
 
-            // these should never be emitted by wasmtime-cranelift
+            // these should never be emitted by wasmtime-winch
             ir::TrapCode::User(_) => unreachable!(),
         },
     }
@@ -94,7 +96,11 @@ impl wasmtime_environ::Compiler for Compiler {
             .func_type_at(index.as_u32())
             // DOIT: Return a CompileError instead of panicking, need to decide
             // on which variant
-            .expect(&format!("function type at index {:?}", index.as_u32()));
+            .context(format!(
+                "function type at index {:?} not found",
+                index.as_u32()
+            ))
+            .map_err(|e| CompileError::Codegen(format!("{:?}", e)))?;
         let FunctionBodyData { body, validator } = data;
         // DOIT: Need to introduce the concept of a validation context so we can
         // share allocations. Look at the wasmtime_cranelift::Compiler to see
@@ -125,7 +131,8 @@ impl wasmtime_environ::Compiler for Compiler {
         &self,
         ty: &wasmtime_environ::WasmFuncType,
     ) -> Result<Box<dyn Any + Send>, CompileError> {
-        let buffer = self.isa
+        let buffer = self
+            .isa
             .compile_trampoline(ty)
             .map_err(|e| CompileError::Codegen(format!("{:?}", e)))?;
 
@@ -177,6 +184,9 @@ impl wasmtime_environ::Compiler for Compiler {
         _host_fn: usize,
         _obj: &mut wasmtime_environ::object::write::Object<'static>,
     ) -> Result<(FunctionLoc, FunctionLoc)> {
+        // TODO: This is used to create a trampline for host functions.
+        // We don't need this for now, but we will need to implement this
+        // when we support imports through Winch.
         todo!()
     }
 
@@ -204,11 +214,6 @@ impl wasmtime_environ::Compiler for Compiler {
             .collect()
     }
 
-    fn is_branch_protection_enabled(&self) -> bool {
-        // DOIT: Add this to the ISA
-        false
-    }
-
     #[cfg(feature = "component-model")]
     fn component_compiler(&self) -> &dyn wasmtime_environ::component::ComponentCompiler {
         todo!()
@@ -221,5 +226,9 @@ impl wasmtime_environ::Compiler for Compiler {
         _funcs: &PrimaryMap<DefinedFuncIndex, (SymbolId, &(dyn Any + Send))>,
     ) -> Result<()> {
         todo!()
+    }
+
+    fn is_branch_protection_enabled(&self) -> bool {
+        self.isa.is_branch_protection_enabled()
     }
 }

@@ -73,8 +73,6 @@ impl<'a> ModuleTextBuilder<'a> {
         let off = self.text.append(
             true,
             &func.body,
-            // DOIT: Decide if we need a function alignment to be taken from the function itself
-            // like Cranelift.
             self.isa.function_alignment(),
         );
 

@@ -1,5 +1,5 @@
 use crate::compiler::Compiler;
-use anyhow::Result;
+use anyhow::{Result, Context};
 use cranelift_codegen::settings::{self, Configurable, SetError};
 use std::sync::Arc;
 use target_lexicon::Triple;
@@ -20,36 +20,23 @@ pub fn builder() -> Box<dyn CompilerBuilder> {
     let triple = Triple::host();
     let mut flags = settings::builder();
 
-    // DOIT: Discuss these flags, won't work without them
     flags
         .enable("avoid_div_traps")
         .expect("should be valid flag");
 
-    // DOIT: Do we actually need this? Copied from Cranelift
-    flags
-        .set("enable_probestack", "false")
-        .expect("should be valid flag");
-
-
     Box::new(Builder {
         triple: triple.clone(),
         shared_flags: flags,
-        // DOIT: Either refactor and re-use `cranelift-native::builder()` or come up with a similar
-        // mechanism to lookup the host's architecture ISA and infer native flags.
-        isa_builder: isa::lookup(triple).expect("host architecture is not supported"),
+        isa_builder: isa::lookup(triple).context("host architecture is not supported").unwrap()
     })
 }
 
-// DOIT: consider if the copy-paste for most of these methods from `cranelift`
-// is the right approach
 impl CompilerBuilder for Builder {
     fn triple(&self) -> &target_lexicon::Triple {
-        // DOIT: see if isa_flags.triple() is the same as self.triple
         &self.triple
     }
 
     fn target(&mut self, target: target_lexicon::Triple) -> Result<()> {
-        // DOIT: consider if we should use `isa::lookup()` here instead.
         self.triple = target;
         Ok(())
     }
@@ -81,8 +68,6 @@ impl CompilerBuilder for Builder {
     }
 
     fn settings(&self) -> Vec<Setting> {
-        // DOIT: consider abstracting this into a function in
-        // `cranelift-codegen` or somewhere shared.
         self.isa_builder
             .iter()
             .map(|s| Setting {
@@ -110,9 +95,7 @@ impl CompilerBuilder for Builder {
         &mut self,
         _cache_store: Arc<dyn wasmtime_environ::CacheStore>,
     ) {
-        // DOIT: we won't support incremental compilation
-        // does this need to be told to the user?
-        todo!()
+        panic!("incremental compilation is not supported with the Winch compiler");
     }
 }
 

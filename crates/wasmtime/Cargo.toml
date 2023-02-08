@@ -18,7 +18,7 @@ features = ["component-model"]
 wasmtime-runtime = { workspace = true }
 wasmtime-environ = { workspace = true }
 wasmtime-jit = { workspace = true }
-wasmtime-winch = { workspace = true }
+wasmtime-winch = { workspace = true, optional = true }
 wasmtime-cache = { workspace = true, optional = true }
 wasmtime-fiber = { workspace = true, optional = true }
 wasmtime-cranelift = { workspace = true, optional = true }
@@ -63,6 +63,8 @@ default = [
   'wat',
   'jitdump',
   'parallel-compilation',
+  # REMOVE
+  'winch',
   'cranelift',
   'pooling-allocator',
   'vtune',
@@ -73,6 +75,10 @@ default = [
 # Wasmtime. If disabled then WebAssembly modules can only be created from
 # precompiled WebAssembly modules.
 cranelift = ["dep:wasmtime-cranelift"]
+
+# Enables the use of the winch baseline compiler when compiling WebAssembly modules.
+# This is an very experimental feature and is not recommended for production use.
+winch = ["dep:wasmtime-winch"]
 
 # Enables support for incremental compilation cache to be enabled in `Config`.
 incremental-cache = ["wasmtime-cranelift?/incremental-cache"]
@@ -117,6 +123,7 @@ posix-signals-on-macos = ["wasmtime-runtime/posix-signals-on-macos"]
 component-model = [
   "wasmtime-environ/component-model",
   "wasmtime-cranelift?/component-model",
+  "wasmtime-winch?/component-model",
   "wasmtime-runtime/component-model",
   "dep:wasmtime-component-macro",
   "dep:wasmtime-component-util",
