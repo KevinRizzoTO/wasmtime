@@ -405,7 +405,6 @@ impl Module {
         // Afterwards compile all functions and trampolines required by the
         // module.
         let signatures = translation.exported_signatures.clone();
-        log::debug!("module signatures: {:?}", signatures);
         let (funcs, trampolines) = engine.join_maybe_parallel(
             // In one (possibly) parallel task all wasm functions are compiled
             // in parallel. Note that this is also where the actual validation
