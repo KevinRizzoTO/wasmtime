@@ -1,8 +1,10 @@
 use anyhow::Result;
+use cranelift_codegen::{Final, MachBufferFinalized};
 use object::write::{Object, SymbolId};
 use std::any::Any;
 use std::sync::Mutex;
 use wasmparser::FuncValidatorAllocations;
+use wasmtime_cranelift_shared::obj::ModuleTextBuilder;
 use wasmtime_cranelift_shared::LinkOptions;
 use wasmtime_environ::{
     CompileError, DefinedFuncIndex, FilePos, FuncIndex, FunctionBodyData, FunctionLoc,
@@ -15,6 +17,8 @@ pub(crate) struct Compiler {
     linkopts: LinkOptions,
     allocations: Mutex<Vec<FuncValidatorAllocations>>,
 }
+
+struct CompiledFunction(MachBufferFinalized<Final>);
 
 impl Compiler {
     pub fn new(isa: Box<dyn TargetIsa>, linkopts: LinkOptions) -> Self {
@@ -72,7 +76,7 @@ impl wasmtime_environ::Compiler for Compiler {
                 start_srcloc,
                 stack_maps: Box::new([]),
             },
-            Box::new(buffer),
+            Box::new(CompiledFunction(buffer)),
         ))
     }
 
@@ -85,14 +89,45 @@ impl wasmtime_environ::Compiler for Compiler {
 
     fn append_code(
         &self,
-        _obj: &mut Object<'static>,
-        _funcs: &[(String, Box<dyn Any + Send>)],
-        _tunables: &Tunables,
-        _resolve_reloc: &dyn Fn(usize, FuncIndex) -> usize,
+        obj: &mut Object<'static>,
+        funcs: &[(String, Box<dyn Any + Send>)],
+        tunables: &Tunables,
+        resolve_reloc: &dyn Fn(usize, FuncIndex) -> usize,
     ) -> Result<Vec<(SymbolId, FunctionLoc)>> {
-        drop(&self.linkopts);
-        assert!(_funcs.is_empty());
-        Ok(Vec::new())
+        let mut builder =
+            ModuleTextBuilder::new(obj, self, self.isa.text_section_builder(funcs.len()));
+        if self.linkopts.force_jump_veneers {
+            builder.force_veneers();
+        }
+        let mut ret = Vec::with_capacity(funcs.len());
+        for (i, (sym, func)) in funcs.iter().enumerate() {
+            let func = &func.downcast_ref::<CompiledFunction>().unwrap().0;
+
+            // TODO: Implement copying over this data into the
+            // `ModuleTextBuilder` type. Note that this should probably be
+            // deduplicated with the cranelift implementation in the long run.
+            assert!(func.relocs().is_empty());
+            assert!(func.traps().is_empty());
+            assert!(func.stack_maps().is_empty());
+            assert!(func.call_sites().is_empty());
+
+            let (sym, range) = builder.append_func(
+                &sym,
+                func.data(),
+                self.function_alignment(),
+                None,
+                &[],
+                |idx| resolve_reloc(i, idx),
+            );
+            builder.append_padding(self.linkopts.padding_between_functions);
+            let info = FunctionLoc {
+                start: u32::try_from(range.start).unwrap(),
+                length: u32::try_from(range.end - range.start).unwrap(),
+            };
+            ret.push((sym, info));
+        }
+        builder.finish();
+        Ok(ret)
     }
 
     fn emit_trampoline_obj(
@@ -132,5 +167,13 @@ impl wasmtime_environ::Compiler for Compiler {
         _funcs: &PrimaryMap<DefinedFuncIndex, (SymbolId, &(dyn Any + Send))>,
     ) -> Result<()> {
         todo!()
+    }
+
+    fn function_alignment(&self) -> u32 {
+        self.isa.function_alignment()
+    }
+
+    fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
+        self.isa.create_systemv_cie()
     }
 }

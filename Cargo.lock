@@ -3593,6 +3593,8 @@ dependencies = [
  "anyhow",
  "cranelift-codegen",
  "cranelift-native",
+ "gimli",
+ "object",
  "target-lexicon",
  "wasmtime-environ",
 ]
@@ -3837,6 +3839,7 @@ version = "7.0.0"
 dependencies = [
  "anyhow",
  "cranelift-codegen",
+ "gimli",
  "object",
  "target-lexicon",
  "wasmparser",
@@ -3996,6 +3999,7 @@ version = "0.5.0"
 dependencies = [
  "anyhow",
  "cranelift-codegen",
+ "gimli",
  "regalloc2",
  "smallvec",
  "target-lexicon",
