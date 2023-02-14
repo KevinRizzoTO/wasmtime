@@ -92,7 +92,7 @@ pub trait TargetIsa: Send + Sync {
         &self,
         sig: &FuncType,
         body: &FunctionBody,
-        validator: FuncValidator<ValidatorResources>,
+        validator: &mut FuncValidator<ValidatorResources>,
     ) -> Result<MachBufferFinalized<Final>>;
 
     /// Get the default calling convention of the underlying target triple.

@@ -85,14 +85,14 @@ impl TargetIsa for X64 {
         &self,
         sig: &FuncType,
         body: &FunctionBody,
-        mut validator: FuncValidator<ValidatorResources>,
+        validator: &mut FuncValidator<ValidatorResources>,
     ) -> Result<MachBufferFinalized<Final>> {
         let mut body = body.get_binary_reader();
         let mut masm = X64Masm::new(self.shared_flags.clone(), self.isa_flags.clone());
         let stack = Stack::new();
         let abi = abi::X64ABI::default();
         let abi_sig = abi.sig(sig);
-        let frame = Frame::new(&abi_sig, &mut body, &mut validator, &abi)?;
+        let frame = Frame::new(&abi_sig, &mut body, validator, &abi)?;
         // TODO Add in floating point bitmask
         let regalloc = RegAlloc::new(RegSet::new(ALL_GPR, 0), regs::scratch());
         let codegen_context = CodeGenContext::new(regalloc, stack, &frame);
