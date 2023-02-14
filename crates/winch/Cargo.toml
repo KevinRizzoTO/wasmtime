@@ -16,5 +16,6 @@ object = { workspace = true }
 cranelift-codegen = { workspace = true }
 
 [features]
+default = ["all-arch"]
 all-arch = ["winch-codegen/all-arch"]
 component-model = ["wasmtime-environ/component-model"]

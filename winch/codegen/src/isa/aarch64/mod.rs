@@ -1,9 +1,11 @@
+use std::mem;
+
 use self::{
     address::Address,
     regs::{scratch, ALL_GPR},
 };
 use crate::{
-    abi::ABI,
+    abi::{ABIArg, ABI},
     codegen::{CodeGen, CodeGenContext},
     frame::Frame,
     isa::{Builder, TargetIsa},
@@ -96,36 +98,51 @@ impl TargetIsa for Aarch64 {
         Ok(masm.finalize())
     }
 
-    fn compile_trampoline(&self, _ty: &WasmFuncType) -> Result<MachBufferFinalized<Final>> {
-        // need to recreate wasm signature for the trampoline params
-        // don't need a Stack object
-        // will be building the function manually using the macro assembler
-        // can assume that our function has no arguments for the first pass
-        //
-        // for arg in abi_args{
-        //   is arg.is_reg(){
-        //      masm.mov(
-        //   }
-        //   call
-        // }
-        //
-        // prologue
-        // move args to registers (for vmctx) at some point
-        // move params in slice to args (registers + stack)
-        // call at function address
-        // retrieve return value and append to return slice
-        // epilogue
-        // return
+    fn compile_trampoline(&self, ty: &WasmFuncType) -> Result<MachBufferFinalized<Final>> {
+        // DOIT: Can this whole thing be abstracted into a different struct that ISA's can share?
         let mut masm = Aarch64Masm::new(self.shared_flags.clone());
 
-        // prologue
+        let abi = abi::Aarch64ABI::default();
+        // DOIT: find a way to convert these types without a clone
+        // WIP implementation for From<FuncType> is written but might not be needed
+        let abi_sig = abi.sig(&ty.clone().into());
+
+        // DOIT: update trampoline to use n arguments instead of one
         masm.prologue();
-        // ignore params right now for the trampoline, just call the function
+        // load up the registers with the arguments
+        // x3 contains the values we need to place
+
+        // DOIT: create params based on a fake wasm signature from what we know the trampoline will
+        // look like
+
+        // DOIT: Should we use X13 to store arguments temporarily?
+        // Also, what operand size should we use in this case?
+        masm.mov(RegImm::reg(regs::xreg(3)), RegImm::reg(regs::xreg(13)), OperandSize::S64);
+
+        // The max size a value can be when reading from the params memory location
+        let value_size = mem::size_of::<u128>();
+
+        for (i, arg) in abi_sig.params.into_iter().enumerate() {
+            match arg {
+                ABIArg::Reg { ty, reg } => {
+                    // load the value from [x3] into the register
+
+                    // params are separated by the largest size of the params
+                    masm.load(Address::offset(regs::xreg(13), (i * value_size) as i64), reg, ty.into());
+                }
+                ABIArg::Stack { ty, offset } => {
+                    todo!()
+                }
+            }
+        }
+
         masm.call(regs::xreg(2));
         // only doing one return value for now
         // aarch64 calling convention is to return in x0
         // read from w0 (for 32 bit) and x0 (for 64 bit)
         // store in [x3] so it's updated for the caller
+        masm.mov(RegImm::reg(regs::xreg(13)), RegImm::reg(regs::xreg(3)), OperandSize::S64);
+
         masm.store(
             RegImm::reg(regs::xreg(0)),
             Address::offset(regs::xreg(3), 0),

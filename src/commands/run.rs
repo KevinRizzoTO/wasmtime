@@ -166,6 +166,7 @@ impl RunCommand {
         if self.wasm_timeout.is_some() {
             config.epoch_interruption(true);
         }
+
         let engine = Engine::new(&config)?;
 
         let preopen_sockets = self.compute_preopen_sockets()?;

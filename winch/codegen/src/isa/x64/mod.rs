@@ -10,6 +10,8 @@ use crate::{
     regset::RegSet,
 };
 use anyhow::Result;
+// DOIT: merge all cranelift_codegen imports into one
+use cranelift_codegen::{TextSectionBuilder, MachTextSectionBuilder};
 use cranelift_codegen::{
     isa::x64::settings as x64_settings, settings::Flags, Final, MachBufferFinalized,
 };
@@ -99,13 +101,12 @@ impl TargetIsa for X64 {
         &self,
         ty: &cranelift_wasm::WasmFuncType,
     ) -> Result<MachBufferFinalized<Final>> {
+        // DOIT: Implement trampoline for x64
         todo!()
     }
 
-    fn text_section_builder(
-        &self,
-        num_labeled_funcs: usize,
-    ) -> Box<dyn cranelift_codegen::TextSectionBuilder> {
+    fn text_section_builder(&self, num_funcs: usize) -> Box<dyn TextSectionBuilder> {
+        // DOIT: Import the Inst
         todo!()
     }
 

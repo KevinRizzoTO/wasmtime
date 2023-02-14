@@ -100,7 +100,7 @@ impl wasmtime_environ::Compiler for Compiler {
             ))
             .map_err(|e| CompileError::Codegen(format!("{:?}", e)))?;
         let FunctionBodyData { body, validator } = data;
-        // DOIT: Need to introduce the concept of a validation context so we can
+        // TODO: Need to introduce the concept of a validation context so we can
         // share allocations. Look at the wasmtime_cranelift::Compiler to see
         // how we can re-use existing context objects.
         let validator = validator.into_validator(Default::default());

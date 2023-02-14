@@ -235,6 +235,10 @@ pub struct CommonOptions {
     /// stack overflow is reported.
     #[clap(long)]
     pub max_wasm_stack: Option<usize>,
+
+    #[cfg(feature = "winch")]
+    #[clap(long)]
+    pub winch: bool,
 }
 
 impl CommonOptions {
@@ -322,6 +326,13 @@ impl CommonOptions {
         {
             if self.pooling_allocator {
                 config.allocation_strategy(wasmtime::InstanceAllocationStrategy::pooling());
+            }
+        }
+
+        #[cfg(feature = "winch")]
+        {
+            if self.winch {
+                config.strategy(wasmtime::Strategy::Winch);
             }
         }
 

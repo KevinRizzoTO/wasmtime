@@ -23,6 +23,8 @@ default = [
     "wasmtime/jitdump",
     "wasmtime/vtune",
     "wasmtime/parallel-compilation",
+    # REMOVE
+    "wasmtime/winch",
 ]
 pooling-allocator = []
 component-model = []

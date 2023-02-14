@@ -1054,8 +1054,10 @@ impl Func {
         }
 
         for ((i, slot), val) in results.iter_mut().enumerate().zip(&values_vec) {
+            dbg!(&val.get_i32());
             let ty = self.ty_ref(store.0).0.results().nth(i).unwrap();
             *slot = unsafe { Val::from_raw(&mut *store, *val, ty) };
+
         }
         values_vec.truncate(0);
         store.0.save_wasm_val_raw_storage(values_vec);
