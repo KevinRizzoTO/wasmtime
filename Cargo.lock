@@ -3839,6 +3839,7 @@ dependencies = [
  "cranelift-codegen",
  "object",
  "target-lexicon",
+ "wasmparser",
  "wasmtime-cranelift-shared",
  "wasmtime-environ",
  "winch-codegen",
