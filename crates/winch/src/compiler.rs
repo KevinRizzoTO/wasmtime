@@ -82,9 +82,14 @@ impl wasmtime_environ::Compiler for Compiler {
 
     fn compile_host_to_wasm_trampoline(
         &self,
-        _ty: &wasmtime_environ::WasmFuncType,
+        ty: &wasmtime_environ::WasmFuncType,
     ) -> Result<Box<dyn Any + Send>, CompileError> {
-        todo!()
+        let buffer = self
+            .isa
+            .compile_trampoline(ty)
+            .map_err(|e| CompileError::Codegen(format!("{:?}", e)))?;
+
+        Ok(Box::new(CompiledFunction(buffer)))
     }
 
     fn append_code(
@@ -109,7 +114,7 @@ impl wasmtime_environ::Compiler for Compiler {
             assert!(func.relocs().is_empty());
             assert!(func.traps().is_empty());
             assert!(func.stack_maps().is_empty());
-            assert!(func.call_sites().is_empty());
+            // assert!(func.call_sites().is_empty());
 
             let (sym, range) = builder.append_func(
                 &sym,

@@ -27,7 +27,7 @@ pub fn run(opt: &Options) -> Result<()> {
     let triple = Triple::from_str(&opt.target)?;
     let shared_flags = settings::Flags::new(settings::builder());
     let isa_builder = lookup(triple)?;
-    let isa = isa_builder.build(shared_flags)?;
+    let isa = isa_builder.finish(shared_flags)?;
     let mut validator = Validator::new();
     let parser = WasmParser::new(0);
     let mut types = Default::default();
@@ -59,9 +59,9 @@ fn compile(
         .function_at(index.as_u32())
         .expect(&format!("function type at index {:?}", index.as_u32()));
     let FunctionBodyData { body, validator } = f.1;
-    let validator = validator.into_validator(Default::default());
+    let mut validator = validator.into_validator(Default::default());
     let buffer = isa
-        .compile_function(&sig, &body, validator)
+        .compile_function(&sig, &body, &mut validator)
         .expect("Couldn't compile function");
 
     println!("Disassembly for function: {}", index.as_u32());

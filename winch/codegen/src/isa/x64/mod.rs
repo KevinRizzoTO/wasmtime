@@ -13,6 +13,7 @@ use anyhow::Result;
 use cranelift_codegen::settings::{self, Flags};
 use cranelift_codegen::{isa::x64::settings as x64_settings, Final, MachBufferFinalized};
 use cranelift_codegen::{MachTextSectionBuilder, TextSectionBuilder};
+use cranelift_wasm::WasmFuncType;
 use target_lexicon::Triple;
 use wasmparser::{FuncType, FuncValidator, FunctionBody, ValidatorResources};
 
@@ -111,4 +112,9 @@ impl TargetIsa for X64 {
         // See `cranelift_codegen`'s value of this for more information
         16
     }
+
+    fn compile_trampoline(&self, ty: &WasmFuncType) -> Result<MachBufferFinalized<Final>> {
+        todo!()
+    }
+
 }
