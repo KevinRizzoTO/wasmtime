@@ -1,15 +1,18 @@
-use self::regs::{scratch, ALL_GPR};
+use std::mem;
+
+use self::{regs::{scratch, ALL_GPR}, address::Address};
 use crate::{
-    abi::ABI,
+    abi::{ABI, ABIArg},
     codegen::{CodeGen, CodeGenContext},
     frame::Frame,
     isa::{Builder, TargetIsa},
-    masm::MacroAssembler,
+    masm::{MacroAssembler, RegImm, OperandSize},
     regalloc::RegAlloc,
     regset::RegSet,
     stack::Stack,
 };
 use anyhow::Result;
+use cranelift_wasm::WasmFuncType;
 use cranelift_codegen::settings::{self, Flags};
 use cranelift_codegen::{isa::aarch64::settings as aarch64_settings, Final, MachBufferFinalized};
 use cranelift_codegen::{MachTextSectionBuilder, TextSectionBuilder};
@@ -110,5 +113,51 @@ impl TargetIsa for Aarch64 {
     fn function_alignment(&self) -> u32 {
         // See `cranelift_codegen::isa::TargetIsa::function_alignment`.
         32
+    }
+
+    fn compile_trampoline(&self, ty: &WasmFuncType) -> Result<MachBufferFinalized<Final>> {
+        let mut masm = Aarch64Masm::new(self.shared_flags.clone());
+
+        let abi = abi::Aarch64ABI::default();
+        // WIP implementation for From<FuncType> is written but might not be needed
+        let abi_sig = abi.sig(&ty.clone().into());
+
+        masm.prologue();
+
+        masm.mov(RegImm::reg(regs::xreg(3)), RegImm::reg(regs::xreg(13)), OperandSize::S64);
+
+        // The max size a value can be when reading from the params memory location
+        let value_size = mem::size_of::<u128>();
+
+        for (i, arg) in abi_sig.params.into_iter().enumerate() {
+            match arg {
+                ABIArg::Reg { ty, reg } => {
+                    // load the value from [x3] into the register
+
+                    // params are separated by the largest size of the params
+                    masm.load(Address::offset(regs::xreg(13), (i * value_size) as i64), reg, ty.into());
+                }
+                ABIArg::Stack { ty, offset } => {
+                    masm.load(Address::offset(regs::xreg(13), (i * value_size) as i64), regs::xreg(19), ty.into());
+                    masm.store(RegImm::reg(regs::xreg(19)), Address::from_shadow_sp(offset as i64), ty.into());
+                }
+            }
+        }
+
+        masm.call(regs::xreg(2));
+        // only doing one return value for now
+        // aarch64 calling convention is to return in x0
+        // read from w0 (for 32 bit) and x0 (for 64 bit)
+        // store in [x3] so it's updated for the caller
+        masm.mov(RegImm::reg(regs::xreg(13)), RegImm::reg(regs::xreg(3)), OperandSize::S64);
+
+        masm.store(
+            RegImm::reg(regs::xreg(0)),
+            Address::offset(regs::xreg(3), 0),
+            OperandSize::S64,
+        );
+        masm.epilogue(0);
+
+        Ok(masm.finalize())
     }
 }
