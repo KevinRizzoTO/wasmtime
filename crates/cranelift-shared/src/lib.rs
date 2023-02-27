@@ -7,6 +7,7 @@ use wasmtime_environ::{FlagValue, FuncIndex};
 mod builder;
 pub mod obj;
 pub use builder::*;
+pub mod compiled_function;
 
 /// A record of a relocation to perform.
 #[derive(Debug, Clone, PartialEq, Eq)]
