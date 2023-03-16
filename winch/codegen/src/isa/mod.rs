@@ -102,6 +102,8 @@ pub trait TargetIsa: Send + Sync {
         validator: FuncValidator<ValidatorResources>,
     ) -> Result<MachBufferFinalized<Final>>;
 
+    fn compile_trampoline(&self, ty: &FuncType) -> Result<MachBufferFinalized<Final>>;
+
     /// Get the default calling convention of the underlying target triple.
     fn call_conv(&self) -> CallConv {
         CallConv::triple_default(&self.triple())

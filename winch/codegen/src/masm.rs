@@ -57,6 +57,13 @@ impl From<Reg> for RegImm {
     }
 }
 
+pub(crate) enum Call {
+    /// A function call to a raw address.
+    Indirect(Reg),
+    /// A function call to a local function.
+    Direct(u32),
+}
+
 /// Generic MacroAssembler interface used by the code generation.
 ///
 /// The MacroAssembler trait aims to expose an interface, high-level enough,
@@ -97,7 +104,7 @@ pub(crate) trait MacroAssembler {
     fn address_from_sp(&self, offset: u32) -> Self::Address;
 
     /// Emit a function call to a locally defined function.
-    fn call(&mut self, callee: u32);
+    fn call(&mut self, callee: Call);
 
     /// Get stack pointer offset.
     fn sp_offset(&mut self) -> u32;

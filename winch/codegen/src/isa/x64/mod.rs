@@ -1,21 +1,25 @@
-use crate::abi::ABI;
-use crate::codegen::{CodeGen, CodeGenContext, FuncEnv};
-use crate::frame::Frame;
+use std::mem;
+
+use crate::abi::{align_to, ABIArg, ABI, ABIResult};
+use crate::codegen::{CodeGen, CodeGenContext, FnCall, FuncEnv};
+use crate::frame::{DefinedLocals, Frame};
 use crate::isa::x64::masm::MacroAssembler as X64Masm;
-use crate::masm::MacroAssembler;
+use crate::masm::{MacroAssembler, RegImm, OperandSize};
+use crate::reg::Reg;
 use crate::regalloc::RegAlloc;
-use crate::stack::Stack;
+use crate::stack::{Stack, Val};
 use crate::{
     isa::{Builder, TargetIsa},
     regset::RegSet,
 };
-use anyhow::Result;
+use anyhow::{bail, Result};
 use cranelift_codegen::{
     isa::x64::settings as x64_settings, settings::Flags, Final, MachBufferFinalized,
 };
 use target_lexicon::Triple;
-use wasmparser::{FuncType, FuncValidator, FunctionBody, ValidatorResources};
+use wasmparser::{FuncType, FuncValidator, FunctionBody, ValType, ValidatorResources};
 
+use self::address::Address;
 use self::regs::ALL_GPR;
 
 mod abi;
@@ -85,13 +89,118 @@ impl TargetIsa for X64 {
         let stack = Stack::new();
         let abi = abi::X64ABI::default();
         let abi_sig = abi.sig(self.winch_call_conv(), sig);
-        let frame = Frame::new(&abi_sig, &mut body, &mut validator, &abi)?;
+
+        let defined_locals = DefinedLocals::new(&mut body, &mut validator)?;
+        let frame = Frame::new(&abi_sig, &defined_locals, &abi)?;
+
         // TODO Add in floating point bitmask
         let regalloc = RegAlloc::new(RegSet::new(ALL_GPR, 0), regs::scratch());
         let codegen_context = CodeGenContext::new(regalloc, stack, &frame);
         let mut codegen = CodeGen::new(&mut masm, &abi, codegen_context, env, abi_sig);
 
         codegen.emit(&mut body, validator)?;
+
+        Ok(masm.finalize())
+    }
+
+    fn compile_trampoline(&self, ty: &FuncType) -> Result<MachBufferFinalized<Final>> {
+        let abi = abi::X64ABI::default();
+        let mut masm = X64Masm::new(self.shared_flags.clone(), self.isa_flags.clone());
+        let stack = Stack::new();
+        let regalloc = RegAlloc::new(RegSet::new(ALL_GPR, 0), regs::scratch());
+
+        let trampoline_ty = FuncType::new(
+            vec![ValType::I32, ValType::I32, ValType::I32, ValType::I32],
+            vec![],
+        );
+        let trampoline_sig = abi.sig(self.wasmtime_call_conv(), &trampoline_ty);
+
+        let frame = Frame::new(&trampoline_sig, &DefinedLocals::default(), &abi)?;
+        let mut codegen_context = CodeGenContext::new(regalloc, stack, &frame);
+
+        let callee_sig = abi.sig(self.winch_call_conv(), ty);
+
+        // This pointer needs to move onto the stack as well prior to assiging arguments to
+        // registers
+        let val_ptr = if let ABIArg::Reg { reg, ty: _ty } = &trampoline_sig.params[3] {
+            Ok(RegImm::reg(*reg))
+        } else {
+            Err(anyhow::anyhow!(""))
+        }
+        .unwrap();
+
+        let scratch = regs::scratch();
+
+        // The max size a value can be when reading from the params memory location
+        let value_size = mem::size_of::<u128>();
+
+        masm.prologue();
+
+        // Reserve stack space so we can spill the trampoline arguments
+        // Do we need to align the stack here? Or can we rely on the FnCall to do that?
+        // We also need to combine the fncall total arg stack size, so we don't do multiple
+        // instructions
+        masm.reserve_stack(trampoline_sig.stack_bytes);
+
+        // Does this really make sense to do here? The value stack gets picked up by the FnCall
+        // It assumes that all arguments will be on the value stack, but for a trampoline that
+        // isn't true (but should it be?)
+        let mut offsets: [u32; 4] = [0; 4];
+
+        trampoline_sig.params.iter().enumerate().for_each(|(i, param)| {
+            if let ABIArg::Reg { reg, ty } = param {
+                let offset = masm.push(*reg);
+                offsets[i] = offset;
+            }
+        });
+
+        // How big of an operand do we need here? My stub signature has an I32 but is that right?
+        masm.mov(val_ptr, RegImm::reg(scratch), crate::masm::OperandSize::S32);
+
+        let call = FnCall::new(&abi, &callee_sig, &mut codegen_context, &mut masm);
+
+        // Keep a second scratch if we need to load a value from the stack
+        // It doesn't need to be saved and can be clobbered by the callee
+        let argv = regs::argv();
+
+        masm.reserve_stack(call.total_arg_stack_space);
+
+        callee_sig.params.iter().enumerate().for_each(|(i, param)| {
+            let value_offset = (i * value_size) as u32;
+
+            match param {
+                ABIArg::Reg { reg, ty } => {
+                    masm.load(Address::offset(scratch, value_offset), *reg, (*ty).into())
+                }
+                ABIArg::Stack { offset, ty } => {
+                    masm.load(Address::offset(scratch, value_offset), argv, (*ty).into());
+                    masm.store(
+                        RegImm::reg(argv),
+                        masm.address_from_sp(*offset),
+                        (*ty).into(),
+                    );
+                }
+            }
+        });
+
+        // Move the function pointer from it's stack location into a scratch register
+        masm.load(masm.address_from_sp(offsets[2]), scratch, OperandSize::S32);
+
+        // Call the function that was passed into the trampoline
+        masm.call(crate::masm::Call::Indirect(scratch));
+
+        // Move the val ptr back into the scratch register so we can load the return values
+        masm.load(masm.address_from_sp(offsets[3]), scratch, OperandSize::S32);
+
+        // Move the return values into the value ptr
+        // Only doing a single return value for now
+        if let ABIResult::Reg { reg, ty } = &callee_sig.result {
+            masm.store(RegImm::reg(*reg), Address::offset(scratch, 0), (*ty).unwrap().into());
+        }
+
+        // How many locals are actually on the stack at this point?
+        // Does the callee clean up it's own stack?
+        masm.epilogue(32);
 
         Ok(masm.finalize())
     }

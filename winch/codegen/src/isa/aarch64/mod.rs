@@ -2,7 +2,7 @@ use self::regs::{scratch, ALL_GPR};
 use crate::{
     abi::ABI,
     codegen::{CodeGen, CodeGenContext, FuncEnv},
-    frame::Frame,
+    frame::{Frame, DefinedLocals},
     isa::{Builder, TargetIsa},
     masm::MacroAssembler,
     regalloc::RegAlloc,
@@ -80,7 +80,9 @@ impl TargetIsa for Aarch64 {
         let stack = Stack::new();
         let abi = abi::Aarch64ABI::default();
         let abi_sig = abi.sig(self.winch_call_conv(), sig);
-        let frame = Frame::new(&abi_sig, &mut body, &mut validator, &abi)?;
+
+        let defined_locals = DefinedLocals::new(&mut body, &mut validator)?;
+        let frame = Frame::new(&abi_sig, &defined_locals, &abi)?;
         // TODO: Add floating point bitmask
         let regalloc = RegAlloc::new(RegSet::new(ALL_GPR, 0), scratch());
         let codegen_context = CodeGenContext::new(regalloc, stack, &frame);
@@ -88,5 +90,9 @@ impl TargetIsa for Aarch64 {
 
         codegen.emit(&mut body, validator)?;
         Ok(masm.finalize())
+    }
+
+    fn compile_trampoline(&self, ty: &FuncType) -> Result<MachBufferFinalized<Final>> {
+        todo!()
     }
 }

@@ -81,7 +81,7 @@ impl<'a> FnCall<'a> {
     ) {
         masm.reserve_stack(self.total_arg_stack_space);
         self.assign_args(context, masm, <A as ABI>::scratch_reg());
-        masm.call(callee);
+        masm.call(crate::masm::Call::Direct(callee));
         masm.free_stack(self.spill_stack_space + self.total_arg_stack_space);
         context.drop_last(self.abi_sig.params.len());
         self.handle_result(context, masm);
@@ -95,7 +95,7 @@ impl<'a> FnCall<'a> {
     ) {
         let arg_count = self.abi_sig.params.len();
         let mut stack_values = context.stack.peekn(arg_count);
-        self.abi_sig.params.iter().for_each(|arg| {
+        self.abi_sig.params.iter().enumerate().for_each(|(i, arg)| {
             let val = stack_values.next().unwrap();
             match &arg {
                 &ABIArg::Reg { ty, reg } => {

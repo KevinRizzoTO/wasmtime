@@ -8,7 +8,7 @@ use regalloc2::{PReg, RegClass};
 // so that the rest of Winch should only need to operate
 // on top of the concept of `Reg`.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub(crate) struct Reg(PReg);
+pub struct Reg(PReg);
 
 impl Reg {
     /// Create a new register from a physical register.

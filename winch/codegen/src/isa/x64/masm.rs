@@ -3,9 +3,13 @@ use super::{
     asm::{Assembler, Operand},
     regs::{self, rbp, rsp},
 };
-use crate::isa::reg::Reg;
 use crate::masm::{DivKind, MacroAssembler as Masm, OperandSize, RegImm, RemKind};
-use crate::{abi::LocalSlot, codegen::CodeGenContext, stack::Val};
+use crate::{
+    abi::{ABIArg, LocalSlot},
+    codegen::{CodeGenContext, FnCall},
+    stack::Val,
+};
+use crate::{isa::reg::Reg, masm::Call};
 use cranelift_codegen::{isa::x64::settings as x64_settings, settings, Final, MachBufferFinalized};
 
 /// x64 MacroAssembler.
@@ -98,7 +102,7 @@ impl Masm for MacroAssembler {
         self.asm.mov(src, dst, size);
     }
 
-    fn call(&mut self, callee: u32) {
+    fn call(&mut self, callee: Call) {
         self.asm.call(callee);
     }
 
@@ -207,7 +211,7 @@ impl Masm for MacroAssembler {
     }
 
     fn epilogue(&mut self, locals_size: u32) {
-        assert!(self.sp_offset == locals_size);
+        assert!(self.sp_offset == locals_size, "sp_offset = {}, locals_size = {}", self.sp_offset, locals_size);
 
         let rsp = rsp();
         if locals_size > 0 {

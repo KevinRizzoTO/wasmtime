@@ -1,8 +1,9 @@
 use crate::{
     abi::{ABISig, ABI},
-    masm::{MacroAssembler, OperandSize},
+    masm::{MacroAssembler, OperandSize, Call},
 };
 use anyhow::Result;
+use cranelift_codegen::isa::CallConv;
 use wasmparser::{BinaryReader, FuncValidator, ValType, ValidatorResources, VisitOperator};
 
 mod context;
