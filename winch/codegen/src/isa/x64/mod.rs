@@ -1,10 +1,10 @@
 use std::mem;
 
-use crate::abi::{align_to, ABIArg, ABI, ABIResult};
-use crate::codegen::{CodeGen, CodeGenContext, FnCall, FuncEnv};
+use crate::abi::{align_to, ABIArg, ABIResult, ABI};
+use crate::codegen::{calculate_frame_adjustment, CodeGen, CodeGenContext, FnCall, FuncEnv};
 use crate::frame::{DefinedLocals, Frame};
 use crate::isa::x64::masm::MacroAssembler as X64Masm;
-use crate::masm::{MacroAssembler, RegImm, OperandSize};
+use crate::masm::{MacroAssembler, OperandSize, RegImm};
 use crate::reg::Reg;
 use crate::regalloc::RegAlloc;
 use crate::stack::{Stack, Val};
@@ -110,7 +110,7 @@ impl TargetIsa for X64 {
         let regalloc = RegAlloc::new(RegSet::new(ALL_GPR, 0), regs::scratch());
 
         let trampoline_ty = FuncType::new(
-            vec![ValType::I32, ValType::I32, ValType::I32, ValType::I32],
+            vec![ValType::I64, ValType::I64, ValType::I64, ValType::I64],
             vec![],
         );
         let trampoline_sig = abi.sig(self.wasmtime_call_conv(), &trampoline_ty);
@@ -136,34 +136,39 @@ impl TargetIsa for X64 {
 
         masm.prologue();
 
-        // Reserve stack space so we can spill the trampoline arguments
-        // Do we need to align the stack here? Or can we rely on the FnCall to do that?
-        // We also need to combine the fncall total arg stack size, so we don't do multiple
-        // instructions
-        masm.reserve_stack(trampoline_sig.stack_bytes);
-
         // Does this really make sense to do here? The value stack gets picked up by the FnCall
         // It assumes that all arguments will be on the value stack, but for a trampoline that
         // isn't true (but should it be?)
         let mut offsets: [u32; 4] = [0; 4];
 
-        trampoline_sig.params.iter().enumerate().for_each(|(i, param)| {
-            if let ABIArg::Reg { reg, ty } = param {
-                let offset = masm.push(*reg);
-                offsets[i] = offset;
-            }
-        });
+        trampoline_sig
+            .params
+            .iter()
+            .enumerate()
+            .for_each(|(i, param)| {
+                if let ABIArg::Reg { reg, ty } = param {
+                    let offset = masm.push(*reg);
+                    offsets[i] = offset;
+                }
+            });
 
         // How big of an operand do we need here? My stub signature has an I32 but is that right?
-        masm.mov(val_ptr, RegImm::reg(scratch), crate::masm::OperandSize::S32);
+        masm.mov(val_ptr, RegImm::reg(scratch), crate::masm::OperandSize::S64);
 
-        let call = FnCall::new(&abi, &callee_sig, &mut codegen_context, &mut masm);
+        let delta = calculate_frame_adjustment(
+            masm.sp_offset(),
+            abi.arg_base_offset() as u32,
+            abi.call_stack_align() as u32,
+        );
+
+        let total_arg_stack_space =
+            align_to(callee_sig.stack_bytes + delta, abi.call_stack_align() as u32);
 
         // Keep a second scratch if we need to load a value from the stack
         // It doesn't need to be saved and can be clobbered by the callee
         let argv = regs::argv();
 
-        masm.reserve_stack(call.total_arg_stack_space);
+        masm.reserve_stack(total_arg_stack_space);
 
         callee_sig.params.iter().enumerate().for_each(|(i, param)| {
             let value_offset = (i * value_size) as u32;
@@ -176,7 +181,7 @@ impl TargetIsa for X64 {
                     masm.load(Address::offset(scratch, value_offset), argv, (*ty).into());
                     masm.store(
                         RegImm::reg(argv),
-                        masm.address_from_sp(*offset),
+                        masm.address_from_sp(24 - *offset),
                         (*ty).into(),
                     );
                 }
@@ -184,23 +189,27 @@ impl TargetIsa for X64 {
         });
 
         // Move the function pointer from it's stack location into a scratch register
-        masm.load(masm.address_from_sp(offsets[2]), scratch, OperandSize::S32);
+        masm.load(masm.address_from_sp(masm.sp_offset() - offsets[2]), scratch, OperandSize::S64);
 
         // Call the function that was passed into the trampoline
         masm.call(crate::masm::Call::Indirect(scratch));
 
+        masm.free_stack(total_arg_stack_space);
+
         // Move the val ptr back into the scratch register so we can load the return values
-        masm.load(masm.address_from_sp(offsets[3]), scratch, OperandSize::S32);
+        masm.load(masm.address_from_sp(frame.locals_size - offsets[3]), scratch, OperandSize::S64);
 
         // Move the return values into the value ptr
         // Only doing a single return value for now
         if let ABIResult::Reg { reg, ty } = &callee_sig.result {
-            masm.store(RegImm::reg(*reg), Address::offset(scratch, 0), (*ty).unwrap().into());
+            masm.store(
+                RegImm::reg(*reg),
+                Address::offset(scratch, 0),
+                (*ty).unwrap().into(),
+            );
         }
 
-        // How many locals are actually on the stack at this point?
-        // Does the callee clean up it's own stack?
-        masm.epilogue(32);
+        masm.epilogue(frame.locals_size);
 
         Ok(masm.finalize())
     }

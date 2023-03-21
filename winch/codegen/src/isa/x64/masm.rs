@@ -74,7 +74,13 @@ impl Masm for MacroAssembler {
         self.increment_sp(bytes);
     }
 
-    fn free_stack(&mut self, _bytes: u32) {}
+    fn free_stack(&mut self, bytes: u32) {
+        if bytes == 0 {
+            return;
+        }
+        self.asm.add_ir(bytes as i32, rsp(), OperandSize::S64);
+        self.decrement_sp(bytes);
+    }
 
     fn local_address(&mut self, local: &LocalSlot) -> Address {
         let (reg, offset) = local
@@ -112,7 +118,7 @@ impl Masm for MacroAssembler {
         self.asm.mov(src, dst, size);
     }
 
-    fn sp_offset(&mut self) -> u32 {
+    fn sp_offset(&self) -> u32 {
         self.sp_offset
     }
 
@@ -211,7 +217,12 @@ impl Masm for MacroAssembler {
     }
 
     fn epilogue(&mut self, locals_size: u32) {
-        assert!(self.sp_offset == locals_size, "sp_offset = {}, locals_size = {}", self.sp_offset, locals_size);
+        assert!(
+            self.sp_offset == locals_size,
+            "sp_offset = {}, locals_size = {}",
+            self.sp_offset,
+            locals_size
+        );
 
         let rsp = rsp();
         if locals_size > 0 {
@@ -239,7 +250,6 @@ impl MacroAssembler {
         self.sp_offset += bytes;
     }
 
-    #[allow(dead_code)]
     fn decrement_sp(&mut self, bytes: u32) {
         assert!(
             self.sp_offset >= bytes,

@@ -81,7 +81,7 @@ impl Frame {
     ) -> Result<Self> {
         let (mut locals, defined_locals_start) = Self::compute_arg_slots(sig, abi)?;
         locals.extend(defined_locals.defined_locals.iter().cloned());
-        let locals_size = align_to(defined_locals.stack_size, abi.stack_align().into());
+        let locals_size = align_to(defined_locals_start + defined_locals.stack_size, abi.stack_align().into());
 
         Ok(Self {
             locals,

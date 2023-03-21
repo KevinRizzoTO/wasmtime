@@ -140,7 +140,7 @@ impl Masm for MacroAssembler {
         self.asm.ldr(src, dst, size);
     }
 
-    fn sp_offset(&mut self) -> u32 {
+    fn sp_offset(&self) -> u32 {
         self.sp_offset
     }
 
